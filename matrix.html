@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Matrix Visualiser</title>
+  <style>
+    #app {
+      display: flex;
+      gap: 20px;
+      justify-content: center;
+      flex-wrap: wrap
+    }
+
+    #side {
+      display: flex;
+      flex-direction: column;
+      gap: 8px
+    }
+
+    @media (max-width:700px) {
+      #side {
+        flex-direction: row
+      }
+    }
+
+    [hidden] {
+      display: none !important
+    }
+
+    body {
+      margin: 0;
+      padding: 20px;
+      text-align: center;
+      background: #eaf3ef;
+      color: rgb(0, 36, 27);
+      font-family: system-ui, sans-serif
+    }
+
+    canvas {
+      display: block;
+      margin: 0 auto 14px;
+      width: min(92vw, 600px);
+      height: auto;
+      background: #f7fbf9;
+      border: 1px solid rgb(78, 135, 140);
+      border-radius: 14px
+    }
+
+    input[type=number] {
+      width: 60px;
+      padding: 8px;
+      margin: 0 6px 0 2px;
+      border-radius: 8px;
+      border: 1px solid rgb(78, 135, 140);
+      background: #f7fbf9;
+      color: rgb(0, 36, 27);
+      text-align: center;
+      font: inherit
+    }
+
+    input[type=number]:focus {
+      outline: 2px solid rgb(206, 20, 131);
+      outline-offset: 1px
+    }
+
+    input[type=range] {
+      width: 240px;
+      accent-color: rgb(206, 20, 131);
+      margin: 14px 8px
+    }
+
+    button {
+      padding: 8px 14px;
+      margin: 4px;
+      border-radius: 10px;
+      border: 1px solid rgb(78, 135, 140);
+      background: rgba(147, 229, 171, .45);
+      color: rgb(0, 36, 27);
+      font: inherit;
+      cursor: pointer
+    }
+
+    button:hover {
+      border-color: rgb(206, 20, 131);
+      background: rgba(147, 229, 171, .8)
+    }
+
+    #info {
+      color: rgb(40, 90, 95);
+      max-width: 520px;
+      margin: 12px auto
+    }
+  </style>
+</head>
+
+<body>
+  <div id="app">
+    <nav id="side">
+      <button data-mode="home">Home</button>
+      <button data-mode="mult">Multiply</button>
+      <button data-mode="inv">Inverse</button>
+    </nav>
+    <main>
+      <canvas id="cv" width="600" height="600"></canvas>
+      <p id="info"></p>
+
+      <div id="panel-home">
+        a <input id="ma" type="number" value="1" step="any" style="width:60px">
+        b <input id="mb" type="number" value="1" step="any" style="width:60px">
+        c <input id="mc" type="number" value="0" step="any" style="width:60px">
+        d <input id="md" type="number" value="1" step="any" style="width:60px"><br>
+        <input id="sl" type="range" min="0" max="100" value="100">
+        <button id="play">Animate</button>
+        <div id="presets"></div>
+      </div>
+
+      <div id="panel-mult" hidden>
+        A <span id="boxA"></span><br>
+        B <span id="boxB"></span><br>
+        <input id="ms" type="range" min="0" max="200" value="200">
+        <button id="playm">Animate</button>
+        <p id="work"></p>
+      </div>
+
+      <div id="panel-inv" hidden>
+        M <span id="boxV"></span><br>
+        <input id="ivs" type="range" min="0" max="200" value="200">
+        <button id="playi">Animate</button>
+      </div>
+
+      
+    </main>
+  </div>
+  <script>
+    const $ = id => document.getElementById(id);
+    const cv = $("cv"), cx = cv.getContext("2d");
+    const u = 50, o = 300;
+    let a = 1, b = 0, c = 0, d = 1;
+
+    function readMatrix() {
+      const m = ["ma", "mb", "mc", "md"].map(id => parseFloat($(id).value) || 0);
+      const t = $("sl").value / 100;
+      a = 1 + (m[0] - 1) * t;
+      b = m[1] * t;
+      c = m[2] * t;
+      d = 1 + (m[3] - 1) * t;
+      return m;
+    }
+    function toPixel(x, y) { return [o + x * u, o - y * u]; }
+    function transform(x, y) { return [a * x + b * y, c * x + d * y]; }
+    function line(x1, y1, x2, y2) {
+      const [p1, q1] = toPixel(x1, y1), [p2, q2] = toPixel(x2, y2);
+      cx.beginPath(); cx.moveTo(p1, q1); cx.lineTo(p2, q2); cx.stroke();
+    }
+    function newLine(x1, y1, x2, y2) {
+      const [tx1, ty1] = transform(x1, y1), [tx2, ty2] = transform(x2, y2);
+      line(tx1, ty1, tx2, ty2);
+    }
+    function polygon(points) {
+      cx.beginPath();
+      points.forEach(([x, y], i) => {
+        const [px, py] = toPixel(...transform(x, y));
+        i === 0 ? cx.moveTo(px, py) : cx.lineTo(px, py);
+      });
+      cx.closePath();
+    }
+    function arrow(x, y, color) {
+      const [tx, ty] = transform(x, y);
+      const [x0, y0] = toPixel(0, 0), [x1, y1] = toPixel(tx, ty);
+      cx.strokeStyle = color; cx.lineWidth = 4;
+      cx.beginPath(); cx.moveTo(x0, y0); cx.lineTo(x1, y1); cx.stroke();
+    }
+    const presets = {
+      "Rotate 90°": [0, -1, 1, 0],
+      "Shear": [1, 1, 0, 1],
+      "Scale ×2": [2, 0, 0, 2],
+      "Squash": [1, 2, 2, 4]
+    };
+    for (const [name, m] of Object.entries(presets)) {
+      const btn = document.createElement("button");
+      btn.textContent = name;
+      btn.onclick = () => {
+        ["ma", "mb", "mc", "md"].forEach((id, i) => $(id).value = m[i]);
+        animate($("sl"), 100, 1200);
+      };
+      $("presets").appendChild(btn);
+    }
+    function scene() {
+      cx.clearRect(0, 0, 600, 600);
+      cx.lineWidth = 1;
+      cx.strokeStyle = "rgba(101, 184, 145,2)";
+      for (let k = -6; k <= 6; k++) {
+        line(k, -6, k, 6);
+        line(-6, k, 6, k);
+      }
+      cx.lineWidth = 2;
+      cx.strokeStyle = "rgb(0, 36, 27)";
+      for (let k = -6; k <= 6; k++) {
+        newLine(k, -6, k, 6);
+        newLine(-6, k, 6, k);
+      }
+      polygon([[0, 0], [1, 0], [1, 1], [0, 1]]);
+      cx.fillStyle = "rgba(147, 229, 171,0.7)";
+      cx.fill();
+      cx.stroke();
+      arrow(1, 0, "rgb(206,20,131)");
+      arrow(0, 1, "rgb(206, 20, 131)");
+    }
+    function draw() {
+      const m = readMatrix();
+      scene();
+      const det = m[0] * m[3] - m[1] * m[2];
+      let text = "det = " + Math.round(det * 1000) / 1000 + ". ";
+      if (Math.abs(det) < 1e-9) text += "Everything collapses onto a line. Area becomes 0.";
+      else text += "Area is multiplied by " + Math.round(Math.abs(det) * 1000) / 1000
+        + (det < 0 ? " and the plane is flipped." : ".");
+      $("info").textContent = text;
+    }
+
+    const vals = ids => ids.map(id => parseFloat($(id).value) || 0);
+    const r = x => Math.round(x * 1000) / 1000;
+    const mul = (P, Q) => [P[0] * Q[0] + P[1] * Q[2], P[0] * Q[1] + P[1] * Q[3],
+    P[2] * Q[0] + P[3] * Q[2], P[2] * Q[1] + P[3] * Q[3]];
+    let mode = "home";
+
+    function makeInputs(boxId, prefix, start) {
+      start.forEach((v, i) => {
+        const el = document.createElement("input");
+        el.type = "number"; el.step = "any"; el.value = v; el.id = prefix + (i + 1);
+        el.style.width = "60px"; $(boxId).appendChild(el);
+      });
+    }
+    function setMode(m) {
+      mode = m;
+      ["home", "mult", "inv"].forEach(k => $("panel-" + k).hidden = (k !== m));
+      render();
+    }
+    function render() {
+      if (mode === "home") draw();
+      else if (mode === "mult") drawMult($("ms").value / 100);
+      else if (mode === "inv") drawInv($("ivs").value / 100);
+
+    }
+    function animate(slider, max, ms) {
+      const start = performance.now();
+      function frame(now) {
+        const p = Math.min(Math.max((now - start) / ms, 0), 1);
+        slider.value = p * max; render();
+        if (p < 1) requestAnimationFrame(frame);
+      }
+      requestAnimationFrame(frame);
+    }
+    function compose(A, B, p) {
+      let M;
+      if (p <= 1) M = [1 + (B[0] - 1) * p, B[1] * p, B[2] * p, 1 + (B[3] - 1) * p];
+      else {
+        const t = p - 1;
+        M = mul([1 + (A[0] - 1) * t, A[1] * t, A[2] * t, 1 + (A[3] - 1) * t], B);
+      }
+      [a, b, c, d] = M;
+      scene();
+    }
+
+    function drawMult(p) {
+      const A = vals(["a1", "a2", "a3", "a4"]), B = vals(["b1", "b2", "b3", "b4"]);
+      compose(A, B, p);
+      const C = mul(A, B);
+      $("info").textContent = p <= 1 ? "Step 1: B bends the plane."
+        : "Step 2: now A bends it again. The final shape is A × B.";
+      $("work").innerHTML =
+        "top-left: " + A[0] + "×" + B[0] + " + " + A[1] + "×" + B[2] + " = " + r(C[0]) + "<br>" +
+        "top-right: " + A[0] + "×" + B[1] + " + " + A[1] + "×" + B[3] + " = " + r(C[1]) + "<br>" +
+        "bottom-left: " + A[2] + "×" + B[0] + " + " + A[3] + "×" + B[2] + " = " + r(C[2]) + "<br>" +
+        "bottom-right: " + A[2] + "×" + B[1] + " + " + A[3] + "×" + B[3] + " = " + r(C[3]);
+    }
+    function drawInv(p) {
+      const B = vals(["v1", "v2", "v3", "v4"]);
+      const det = B[0] * B[3] - B[1] * B[2];
+      if (Math.abs(det) < 1e-9) {
+        [a, b, c, d] = [1, 0, 0, 1]; scene();
+        $("info").textContent = "det = 0: this matrix squashes the plane flat, so it has no inverse.";
+        return;
+      }
+      const A = [B[3] / det, -B[1] / det, -B[2] / det, B[0] / det];   // the 2×2 inverse formula
+      compose(A, B, p);
+      $("info").textContent = p <= 1 ? "Step 1: the matrix bends the plane."
+        : "Step 2: its inverse undoes it, and you end up back where you started.";
+    }
+    
+
+    makeInputs("boxA", "a", [1, 2, 0, 1]);
+    makeInputs("boxB", "b", [1, 1, 0, 1]);
+    makeInputs("boxV", "v", [1, 1, 0, 1]);
+
+    document.addEventListener("input", render);
+    $("play").onclick = () => animate($("sl"), 100, 1200);
+    $("playm").onclick = () => animate($("ms"), 200, 2400);
+    $("playi").onclick = () => animate($("ivs"), 200, 2400);
+    document.querySelectorAll("#side button").forEach(btn =>
+      btn.onclick = () => setMode(btn.dataset.mode));
+    setMode("home");
+
+  </script>
+</body>
+
+</html>
